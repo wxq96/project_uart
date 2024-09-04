@@ -1,0 +1,82 @@
+module uart_tx(
+
+	input 			i_clk,
+	input			i_ rst_n,
+	input			i_tx_en,
+	input	[15:00]	 	i_bps_cnt,
+	input	[07:00]		i_data_tx,
+ 
+	output	reg		o_tx_data
+);
+
+
+	reg		[07:00]	tx_data;
+	reg		[16:00]	clk_cnt;
+	reg		[03:00]	bit_cnt;
+	reg			bit_flag;
+	reg			tx_flag;
+
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	 bit_flag <= 1'b0;
+	else if (i_tx_en)
+                  bit_flag <=1'b1;
+	else if ((clk_cnt==i_bps_cnt -1) && bit_cnt ==4'd9)
+	  bit_flag <= 1'd0;
+	else
+	   bit_flag <= bit_flag;
+end
+
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	 clk_cnt <= 17'b0;
+	else if (bit_flag)
+                   if ((clk_cnt==i_bps_cnt -1) && bit_cnt ==4'd9)
+	        clk_cnt <= 17'd0;
+	   else
+	        clk_cnt <= clk_cnt +1'd1;
+	else 
+	   clk_cnt <= 17'd0;
+end
+
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	 bit_cnt <= 4'b0;
+	else if (bit_flag)
+                   if ((clk_cnt==i_bps_cnt -1)
+	      if bit_cnt ==4'd9)
+	        bit_cnt <= 4'd0;
+	       else 
+	        bit_cnt <= bit_cnt +1'd1;
+	   else
+	     bit_cnt <=bit_ 89iiiiiiiiiii	`cnt;	
+	else 
+	   bit_cnt <= 4'd0;
+end
+
+always @posedge i clk or negedge i rst n)
+begin
+	if(!i_rst_n) beain
+	  o_tx_data<=1'd1:
+	end
+	else if(bit_flag)begin
+	  case(bit_cnt)
+		4'd0:o_tx_data<=1'b0;
+		4'd1:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd2:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd3:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd4:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd5:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd6:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd7:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd8:o_tx_data<=i_data_tx[bit_cnt-1];
+		4'd9:o tx data<=1'b1;
+	  endcase
+	else 
+	  o_tx_data<=1'b1;
+	end
+end
+endmodule

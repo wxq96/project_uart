@@ -1,0 +1,269 @@
+module uart_rx(
+
+	input 			i_clk,
+	input			i_ rst_n,
+	input			i_rx_in,
+	input			rx_neg,
+	
+	output  	reg[15:00] 	bps_cnt,
+	output	reg		error,
+	output 	reg[07:00]		o_rx_data,
+	output	reg		o_data_en, 
+	output	reg		rx_data
+);
+
+	parameter		P_IDLE		= 5'b00001 ;
+	parameter		P__ADAPTIVE	= 5'b00010 ;
+	parameter		P_STOP_BIT	= 5'b00100 ;
+	parameter		P_GET_DATA	= 5'b01000 ;
+	parameter		P_END		= 5'b10000 ;
+
+
+//2 clk delay
+	reg		[02:00]	rxd_dly;
+	reg			rx_pos_d1;
+	wire			rx_pos;
+
+//state_flag
+
+
+
+	reg		[04:00]	c_state;
+	reg		[04:00]	n_state;
+	reg		[15:00]	rec_cnt;
+	reg		[03:00]	bit_cnt;
+
+//bps_cnt1-------余数计数器
+//bps_cnt2-------波特率计数器
+//bps_cnt3-------2分法的余数计数器
+	reg		[03:00]	bps_cnt1;
+	reg		[15:00]	bps_cnt2;
+	reg		[03:00]	bps_cnt3;
+	reg			sample;
+
+//2 clk delay
+
+always @(posedge i_clk or negedge i_rst_n) begin
+            if(!i_rst_n)	begin
+	  	rxd_dly<=3'd0;
+	end
+            else if begin
+		rxd_dly<= {rxd_dly[1],rxd_dly[0],i_rx_in};
+	end
+end
+
+assign rx_neg    = ~rxd_dly[1]&rxd_dly[2];
+assign rx_pos   =   rxd_dly[1]&~rxd_dly[2];
+
+//state mashine
+
+always @(posedge i_clk or negedge i_rst_n) begin
+	if(!i_rst_n)begin
+		c_state <= P_IDLE;
+	end
+	else
+		c_state <= n_state;
+	end
+
+always @（*）begin
+	if（!i_rst_n）
+		n_state <= P_IDLE;
+	else
+	     case(c_state)
+		P_IDLE:	begin
+			if(rx_neg == 1'b1)
+			   n_state <= P_ADAPTIVE；
+			else
+			   n_state <= P_IDLE;
+		          	end
+		P_ADAPTIVE:  	begin
+			if(rx_pose == 1'b1)
+			  n_state <= P_STOP_BIT;
+			else
+			  n_state <= P_ADAPTIVE;
+			 end
+		P_STOP_BIT:	begin
+			if(rx_neg== 1'b1)
+			  n_state <= P_GET_DATA;
+			else 
+			  n_state <= P_STOP_BIT;
+			  end
+		P_GET_BIT:
+			 if(error)  begin
+			  n_state <= P_END;	
+			 else if (bit_cnt ==4'd9 && (rec_cnt==(new_bps_cnt - 1'd1)) )
+			  n_state <= P_GET_BIT；
+			 else
+			  n_state <= P_IDLE；
+			   end
+		P_END:
+			begin
+			 n_state <=P_IDLE;
+			end
+		endcase
+end
+
+
+
+always @(posedge i_clk or negedge i_rst_n) begin
+	if(!i_rst_n)begin
+		error <= 1'd0;
+	end
+	else if(c_state == P_GET_DATA)begin
+		if(bit_cnt == 4'd9)
+		  error <= rxd_dly[1]?0:1;
+		else 
+		  error <= error;
+	end
+	else begin
+	  error <= 1'd0;
+	end
+end
+
+//Autoadaptive bps rate and new sample
+
+always @(posedge i_clk or negedge i_rst_n) begin
+	if(!i_rst_n)begin
+		bps_cnt1 <= 4'd0;
+	end
+	else if(c_state == P_END)begin
+		bps_cnt1 <= 4'd0;
+	end
+	else if(bps_cnt1== 4'd8)begin
+		bps_cnt1 <= 4'd0;
+	end
+	else if(n_state ==P_ADAPTIVE)begin
+		bps_cnt1 <= bps_cnt1 +1'd1;
+	end	
+	else
+		bps_cnt1 <= bps_cnt1;
+end
+
+always @(posedge i_clk or negedge i_rst_n) begin
+	if(!i_rst_n)begin
+		bps_cnt2 <= 16'd0;
+	end
+	else if(c_state == P_END)begin
+		bps_cnt2 <= 16'd0;
+	end
+	else if((c_state ==P_ADAPTIVE)&(bps_cnt1== 4'd8)begin
+		bps_cnt2 <= bps_cnt2 +1'd1;
+	end	
+	else
+		bps_cnt2 <= bps_cnt2;
+end
+
+always @(posedge i_clk or negedge i_rst_n) begin
+	if(!i_rst_n)begin
+		rx_pos_d1 <= 1'd0;
+	end
+	else
+		rx_pos_d1 <= 1'd0;
+end
+
+always @(posedge i_clk or negedge i_rst_n) begin
+	if(!i_rst_n)begin
+		bps_cnt3 <= 4'd0;
+	end
+	else if(rx_pos_d1)begin
+		bps_cnt3 <= bps_cnt1;
+	end	
+	else
+		bps_cnt3 <= bps_cnt3;
+end
+
+//bps_cnt
+
+always @(posedge i_clk or negedge i_rst_n) begin
+	if(!i_rst_n)begin
+		bps_cnt <= 16'd0;
+	else 
+	      case(bit_cnt)
+		4'd0: bps_cnt <= bps_cnt2;
+		4'd1: bps_cnt <= (bps_cnt3>4'd2)?bps_cnt2+1'd1 : bps_cnt2;
+		4'd2: bps_cnt <= (bps_cnt3>4'd4)?bps_cnt2+1'd1 : bps_cnt2;
+		4'd1: bps_cnt <= (bps_cnt3>4'd6)?bps_cnt2+1'd1 : bps_cnt2;
+		4'd1: bps_cnt <= (bps_cnt3>4'd7)?bps_cnt2+1'd1 : bps_cnt2;
+		4'd1: bps_cnt <= (bps_cnt3>4'd5)?bps_cnt2+1'd1 : bps_cnt2;
+		4'd1: bps_cnt <= (bps_cnt3>4'd3)?bps_cnt2+1'd1 : bps_cnt2;
+		4'd1: bps_cnt <= (bps_cnt3>4'd1)?bps_cnt2+1'd1 : bps_cnt2;
+		4'd1: bps_cnt <= bps_cnt2+1'd1 ;
+	default begin
+	 bps_cnt <= bps_cnt2;
+	 end
+	 endcase
+end
+
+//rec_cnt 
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	  rec_cnt <= 16'd0;
+	else if (c_state == P_GET_DATA)
+	       if(rec_cnt == (bps_cnt - 1'd1))
+	           rec_cnt <= 16'd0;
+	       else 
+	           rec_cnt<=rec_cnt +1'd1;
+	 else
+	  rec_cnt<= 16'd0;
+end
+
+//sample
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	   sample <=1'd0;
+	else if(c_state ==P_GET_DATA && (rec_cnt==(bps_cnt>>1)-1))
+	    sample <=1'd1;
+	else
+	     sample <=1'd0;
+end
+
+//bit_cnt
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	  bit_cnt <= 4'd0;
+	else if (c_state == P_GET_DATA)
+	       if(rec_cnt == (bps_cnt - 1'd1))
+	           bit_cnt <= bit_cnt+1;
+	       else 
+	           bit_cnt<=bit_cnt;
+	 else
+	  bit_cnt<= 4'd0;
+end
+
+//get_data
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	  o_rx_data <= 4'd0;
+	else if (c_state ==P_GET_DATA && sample ==1'b1 && (bit_cnt>4'd0)&&(bit_cnt<4'd9)))
+	  o_rx_data <= {rxd_dly[2],o_rx_data[7:1]};
+	else
+	   o_rx_data <= o_rx_data;
+end
+
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	   rx_data <=8'd0;
+	else if(o_data_en)
+	    rx_data <=o_rx_data;
+	else
+	     rx_data <=rx_data;
+end
+
+always @(posedge i_clk or negedge i_rst_n)
+begin
+	if(!i_rst_n)
+	  o_data_en <= 1'd0;
+	else if (bit_cnt==4'd9 && (rec_cnt ==(bps_cnt -1)))
+	  o_data_en <= 1'd1;
+	else
+	   o_data_en <= 1'd0;
+end
+
+endmodule
+	 	 
+			
